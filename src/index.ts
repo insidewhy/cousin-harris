@@ -10,6 +10,10 @@ export interface CousinHarrisChange {
 
 export type OnCousinHarrisChange = (change: CousinHarrisChange) => void
 
+export interface CousinHarrisOptions {
+  watchProject?: boolean
+}
+
 interface FileChange {
   name: string
   exists: boolean
@@ -20,10 +24,14 @@ interface FileChange {
 function cousinHarris(
   roots: string[],
   onChange: OnCousinHarrisChange,
-  options: { watchProject?: boolean } = {},
-): Promise<never> {
-  return new Promise((_, reject) => {
-    const client = new Client()
+  options: CousinHarrisOptions = {},
+): Promise<() => Promise<void>> {
+  const client = new Client()
+
+  return new Promise<() => Promise<void>>((resolve, reject) => {
+    const stopPromise = new Promise<void>((resolveStop) => {
+      client.on('end', resolveStop)
+    })
 
     client.on('subscription', ({ root, files }) => {
       if (!files) {
@@ -79,6 +87,11 @@ function cousinHarris(
               if (error) {
                 return endAndReject(`Could not subscribe to changes: ${error.message}`)
               }
+
+              resolve(() => {
+                client.end()
+                return stopPromise
+              })
             })
           },
         )

@@ -8,9 +8,11 @@
 
 ```typescript
 import cousinHarris from 'cousin-harris'
+import delay from 'delay'
 
 const roots = ['dir1', 'dir2']
-cousinHarris(
+// resolves to a function to stop the watch after the watch has been setup
+const stop = await cousinHarris(
   roots,
   ({ root, path, removal, isDirectory }) => {
     console.log(
@@ -23,6 +25,9 @@ cousinHarris(
   },
   { watchProject: true },
 )
+// stop watching after one second
+await delay(1000)
+await stop()
 ```
 
 Without `{ watchProject: true }` watchman's `watch` command is used instead of `watch-project`.
