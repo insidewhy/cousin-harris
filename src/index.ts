@@ -128,8 +128,8 @@ function cousinHarris(
         runCleanup = true
         await removeWatches()
         client.end()
-        await stopPromise
       }
+      await stopPromise
     })
   })
 }
