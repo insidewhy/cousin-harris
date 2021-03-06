@@ -28,7 +28,7 @@ function cousinHarris(
 ): Promise<() => Promise<void>> {
   const client = new Client()
 
-  return new Promise<() => Promise<void>>((resolve, reject) => {
+  return new Promise<() => Promise<void>>(async (resolve, reject) => {
     const stopPromise = new Promise<void>((resolveStop) => {
       client.on('end', resolveStop)
     })
@@ -54,48 +54,60 @@ function cousinHarris(
       })
     })
 
-    client.capabilityCheck({ optional: [], required: ['relative_root'] }, async (error) => {
-      const endAndReject = (message: string) => {
-        client.end()
-        reject(new Error(message))
-      }
+    const endAndReject = (message: string) => {
+      client.end()
+      reject(new Error(message))
+    }
 
-      if (error) {
-        return endAndReject(`Could not confirm capabilities: ${error.message}`)
-      }
-
-      roots.map(async (root) => {
-        const fullSrcDir = await realpath(root)
-        client.command(
-          [options.watchProject ? 'watch-project' : 'watch', fullSrcDir],
-          (error, watchResp) => {
-            if (error) {
-              return endAndReject(`Could not initiate watch: ${error.message}`)
-            }
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const sub: any = {
-              expression: ['allof', ['match', '*']],
-              fields: ['name', 'exists', 'type'],
-            }
-            const relativePath = watchResp.relative_path
-            if (relativePath) {
-              sub.relative_root = relativePath
-            }
-
-            client.command(['subscribe', watchResp.watch, 'sub-name', sub], (error) => {
-              if (error) {
-                return endAndReject(`Could not subscribe to changes: ${error.message}`)
-              }
-
-              resolve(() => {
-                client.end()
-                return stopPromise
-              })
-            })
-          },
-        )
+    await new Promise<void>((resolveCapabilityCheck) => {
+      client.capabilityCheck({ optional: [], required: ['relative_root'] }, async (error) => {
+        if (error) {
+          endAndReject(`Could not confirm capabilities: ${error.message}`)
+        } else {
+          resolveCapabilityCheck()
+        }
       })
+    })
+
+    await Promise.all(
+      roots.map(
+        async (root) =>
+          new Promise<void>(async (resolveWatch) => {
+            const fullSrcDir = await realpath(root)
+            client.command(
+              [options.watchProject ? 'watch-project' : 'watch', fullSrcDir],
+              (error, watchResp) => {
+                if (error) {
+                  endAndReject(`Could not initiate watch: ${error.message}`)
+                  return
+                }
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const sub: any = {
+                  expression: ['allof', ['match', '*']],
+                  fields: ['name', 'exists', 'type'],
+                }
+                const relativePath = watchResp.relative_path
+                if (relativePath) {
+                  sub.relative_root = relativePath
+                }
+
+                client.command(['subscribe', watchResp.watch, 'sub-name', sub], (error) => {
+                  if (error) {
+                    endAndReject(`Could not subscribe to changes: ${error.message}`)
+                  } else {
+                    resolveWatch()
+                  }
+                })
+              },
+            )
+          }),
+      ),
+    )
+
+    resolve(() => {
+      client.end()
+      return stopPromise
     })
   })
 }
