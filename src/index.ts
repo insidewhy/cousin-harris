@@ -20,7 +20,7 @@ interface FileChange {
   type: 'f' | 'd'
 }
 
-// returns a promise that never resolves
+// returns a promise that can be used to cancel the watches
 function cousinHarris(
   roots: string[],
   onChange: OnCousinHarrisChange,
