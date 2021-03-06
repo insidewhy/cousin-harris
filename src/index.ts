@@ -69,6 +69,19 @@ function cousinHarris(
       })
     })
 
+    const watchedRoots: string[] = []
+    const removeWatches = () =>
+      Promise.all(
+        watchedRoots.splice(0).map(
+          (srcDir) =>
+            new Promise<void>((resolve) => {
+              client.command(['watch-del', srcDir], () => {
+                resolve()
+              })
+            }),
+        ),
+      )
+
     await Promise.all(
       roots.map(
         async (root) =>
@@ -76,11 +89,14 @@ function cousinHarris(
             const fullSrcDir = await realpath(root)
             client.command(
               [options.watchProject ? 'watch-project' : 'watch', fullSrcDir],
-              (error, watchResp) => {
+              async (error, watchResp) => {
                 if (error) {
+                  await removeWatches()
                   endAndReject(`Could not initiate watch: ${error.message}`)
                   return
                 }
+
+                watchedRoots.push(fullSrcDir)
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const sub: any = {
@@ -92,8 +108,9 @@ function cousinHarris(
                   sub.relative_root = relativePath
                 }
 
-                client.command(['subscribe', watchResp.watch, 'sub-name', sub], (error) => {
+                client.command(['subscribe', watchResp.watch, 'sub-name', sub], async (error) => {
                   if (error) {
+                    await removeWatches()
                     endAndReject(`Could not subscribe to changes: ${error.message}`)
                   } else {
                     resolveWatch()
@@ -105,9 +122,14 @@ function cousinHarris(
       ),
     )
 
-    resolve(() => {
-      client.end()
-      return stopPromise
+    let runCleanup = false
+    resolve(async () => {
+      if (!runCleanup) {
+        runCleanup = true
+        await removeWatches()
+        client.end()
+        await stopPromise
+      }
     })
   })
 }

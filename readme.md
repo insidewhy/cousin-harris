@@ -31,3 +31,5 @@ await stop()
 ```
 
 Without `{ watchProject: true }` watchman's `watch` command is used instead of `watch-project`.
+
+The `root` passed to the update function will be an absolute path, if it's important to receive the same `root` as was passed then the result of `fs.realPath` or equivalent should be passed to `cousinHarris`.

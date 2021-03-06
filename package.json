@@ -1,6 +1,6 @@
 {
   "name": "cousin-harris",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "a wrapper around fb-watchman with a nicer interface",
   "author": "insidewhy <github@chilon.net>",
   "license": "ISC",
