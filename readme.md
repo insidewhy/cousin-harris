@@ -11,8 +11,7 @@ import cousinHarris from 'cousin-harris'
 import delay from 'delay'
 
 const roots = ['dir1', 'dir2']
-// resolves to a function to stop the watch after the watch has been setup
-const stop = await cousinHarris(
+const watcher = cousinHarris(
   roots,
   ({ root, path, removal, isDirectory }) => {
     console.log(
@@ -25,9 +24,18 @@ const stop = await cousinHarris(
   },
   { watchProject: true },
 )
-// stop watching after one second
+
+// wait for all watches to be initialised
+await watcher.waitForWatches
+
+// add more watches after a second
 await delay(1000)
-await stop()
+await watcher.addRoot('dir3')
+await watcher.waitForWatches
+
+// stop watching one second after setting up watch for 'dir3'
+await delay(1000)
+await watcher.stop()
 ```
 
 Without `{ watchProject: true }` watchman's `watch` command is used instead of `watch-project`.

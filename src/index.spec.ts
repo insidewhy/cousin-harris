@@ -1,17 +1,19 @@
-import { mkdir, remove, writeFile, unlink } from 'fs-extra'
+import { ensureDir, mkdir, remove, writeFile, unlink } from 'fs-extra'
+import { sortBy } from 'lodash'
 import { join as pathJoin } from 'path'
 import waitForExpect from 'wait-for-expect'
 
-import cousinHarris, { CousinHarrisChange } from '.'
+import cousinHarris, { CousinHarrisChange, CousinHarrisWatcher } from '.'
 
 describe('cousinHarris', () => {
   const BASE_DIR = pathJoin(__dirname, 'dirs')
-  let stop = () => Promise.resolve()
+  let watcher: CousinHarrisWatcher | undefined
   let root = ''
-  let events = new Set<CousinHarrisChange>()
+  let otherRoot = ''
+  let events: CousinHarrisChange[] = []
 
   beforeAll(async () => {
-    await mkdir(BASE_DIR)
+    await ensureDir(BASE_DIR)
   })
 
   afterAll(async () => {
@@ -19,26 +21,37 @@ describe('cousinHarris', () => {
   })
 
   beforeEach(async () => {
-    events = new Set()
-    await makeDirectory()
+    events = []
+    await createRoot()
   })
 
   const startWatching = async () => {
-    stop = await cousinHarris([root], (event) => events.add(event))
+    watcher = cousinHarris([root], (event) => events.push(event))
+    await watcher.waitForWatches
   }
 
   afterEach(async () => {
-    await stop()
+    await watcher?.stop()
+    watcher = undefined
   })
 
-  const makeDirectory = async () => {
-    root = pathJoin(BASE_DIR, Math.floor(Math.random() * 10_000_000).toString())
+  const randomDirectoryPath = () =>
+    pathJoin(BASE_DIR, Math.floor(Math.random() * 10_000_000).toString())
+
+  const createRoot = async () => {
+    root = randomDirectoryPath()
     await mkdir(root)
+  }
+
+  const createOtherRoot = async () => {
+    otherRoot = randomDirectoryPath()
+    await mkdir(otherRoot)
   }
 
   const expectEvents = async (expected: CousinHarrisChange[]) =>
     waitForExpect(() => {
-      expect(events).toEqual(new Set(expected))
+      // watchman doesn't report events in order so sort them by path
+      expect(sortBy(events, 'path')).toEqual(sortBy(expected, 'path'))
     })
 
   it('can watch a directory for file changes', async () => {
@@ -59,6 +72,21 @@ describe('cousinHarris', () => {
     await expectEvents([
       { root, path: 'remove', removal: false, isDirectory: false },
       { root, path: 'remove', removal: true, isDirectory: false },
+    ])
+  })
+
+  it('can add root after initial root', async () => {
+    await startWatching()
+    writeFile(pathJoin(root, 'first'), 'stuff')
+    const firstEvent = { root, path: 'first', removal: false, isDirectory: false }
+    await expectEvents([firstEvent])
+    await createOtherRoot()
+    watcher?.addRoot(otherRoot)
+    await watcher?.waitForWatches
+    writeFile(pathJoin(otherRoot, 'second'), 'stuff')
+    await expectEvents([
+      firstEvent,
+      { root: otherRoot, path: 'second', removal: false, isDirectory: false },
     ])
   })
 })
