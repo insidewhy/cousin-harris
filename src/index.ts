@@ -119,11 +119,6 @@ function cousinHarris(
       files.forEach(({ name, exists, type }: FileChange) => {
         const isDirectory = type === 'd'
         if (exists) {
-          if (isDirectory) {
-            // ignore directory changes
-            return
-          }
-
           onChange({ root, path: name, removal: false, isDirectory })
         } else {
           onChange({ root, path: name, removal: true, isDirectory })
